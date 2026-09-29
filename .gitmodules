@@ -1,0 +1,6 @@
+[submodule "MIRLO"]
+	path = MIRLO
+	url = https://github.com/tortugaveloz/MIRLO.git
+[submodule "decomp"]
+	path = decomp
+	url = https://github.com/n64decomp/sm64.git

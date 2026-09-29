@@ -1,0 +1,16 @@
+# Your ROM, and anything built from it: never commit these
+*.z64
+*.n64
+*.v64
+baserom*
+/build/
+/sim/build*/
+*.ppm
+*.wav
+
+# Build output
+*.o
+*.d
+*.elf
+*.map
+__pycache__/
