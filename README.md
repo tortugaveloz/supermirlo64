@@ -1,6 +1,6 @@
 # Super Mirlo 64
 
-Super Mario 64 on [Mirlo](https://github.com/tortugaveloz/MIRLO), a RISC-V computer for the Analogue Pocket with an N64-style rasterizer.
+Super Mario 64 on [Mirlo](https://github.com/tortugaveloz/MIRLO), a RISC-V computer for the Analogue Pocket inspired by the N64 hardware.
 
 It is a port of the [n64decomp/sm64](https://github.com/n64decomp/sm64) decompilation. The engine is compiled unchanged; this repository adds:
 * a libultra layer (`hal/`);
@@ -9,7 +9,7 @@ It is a port of the [n64decomp/sm64](https://github.com/n64decomp/sm64) decompil
 
 The game CPU runs the game, Mirlo's geometry core does what the N64's RSP did (transform, lighting, clipping, triangle setup), and MRDP draws. It runs at the N64's own 320 × 240.
 
-**This repository contains none of the game's code or assets.** You need your own copy of the game (the US ROM), from which the build extracts the assets. The game file the build produces contains data from that ROM: do not share it.
+**This repository contains none of the game's code or assets.** You need your own copy of the game, from which the build extracts the assets.
 
 ## Contents
 
@@ -27,7 +27,7 @@ The game CPU runs the game, Mirlo's geometry core does what the N64's RSP did (t
 
 ## Building the game file (Linux)
 
-Tested on Ubuntu 24.04 (x86-64).
+The following steps assume Ubuntu 24.04 (x86-64).
 
 ### 1. Tools
 
@@ -107,24 +107,15 @@ Launch **Mirlo** (under Computer) and pick the game. Saves go to `Saves/mirlo/co
 | X, Y | C-right, C-left |
 | L | Z |
 | R | R |
-| Start (+) | Start |
-| Select (−) | C-down |
+| Start | Start |
+| Select | C-down |
 
-The core settings (Pocket menu → Core Settings) choose:
-* the stick and N64 D-pad sources;
-* whether Start needs Select+Start;
-* whether R works as a modifier, turning X/B/Y/A into the four C buttons.
+C-up is unassigned by default, but it can be assigned through the Pocket Controls menu.
 
-The Pocket's own Controls menu remaps the physical buttons.
-
-## The host simulator
-
-`sim/` builds the whole game for Linux with the host compiler and renders every frame through the same translator, geometry pipeline and MRDP model the Pocket runs. It needs step 5's `make assets`, not a Pocket or a bitstream. See `sim/README.md`.
-
-```bash
-sim/build.sh
-SIM_PAD="150-153:8000,300-303:10" SIM_DUMP_EVERY=50 SIM_DUMP_FRAME=1000 sim/build/sim
-```
+More control options are included in the core settings (Pocket menu → Core Settings):
+* Start can be mapped to the combination Select+Start. That would free the Start button for something else.
+* R can be chosen to work as a modifier. In that mode, while R is pressed, X/B/Y/A become the four C buttons. In addition, the D-Pad works as a joystick press at 50%.
+* The stick and N64 D-pad sources can also be configured.
 
 ## License
 
