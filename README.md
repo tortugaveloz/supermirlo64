@@ -73,6 +73,14 @@ This generates the register headers and the LiteX libraries, and builds the geom
 
 The Pocket needs the Mirlo core, whose bitstream you build with Quartus (see `MIRLO/README.md`). The geometry core's firmware is part of that bitstream, and the game reads one of its variables. So build the game against the same `MIRLO/lang/c/geom/build/geom.elf` the bitstream was built with, or pass `GEOM_ELF=<that geom.elf>` to `make` below.
 
+The released Mirlo core's firmware was built with the xPack `riscv-none-elf-gcc` 15.2.0 recommended above. With that toolchain the variable is at address `0x20008030`, which you can check:
+
+```bash
+riscv-none-elf-nm MIRLO/lang/c/geom/build/geom.elf | grep geom_tris_emitted    # 20008030 B geom_tris_emitted
+```
+
+If yours differs (another compiler version, or a different Mirlo revision), the game would read the wrong address: use the `geom.elf` your bitstream was built from, via `GEOM_ELF=`.
+
 ### 4. Your ROM
 
 Copy your Super Mario 64 (USA) ROM, in big-endian `.z64` format, to `baserom.us.z64` in this directory. Its SHA-1 must be `9bef1128717f958171a4afac3ed78ee2bb4e86ce`:
