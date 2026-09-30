@@ -20,6 +20,29 @@ MIRLO        ?= MIRLO
 SM64_DIR_ABS := $(abspath $(SM64_DIR))
 FAKE_MIPS_BIN := $(abspath tools/fake-mips-toolchain)
 
+# CPU=riscv (default): MIRLO's LiteX SoC. CPU=mips: MIRLO's MIPS SoC (its
+# branch `mips`, docs/mips.md) -- the same program for the MIPS game CPU,
+# into build/mips/.
+CPU ?= riscv
+MIRLO_C          = $(MIRLO)/lang/c
+ifeq ($(CPU),mips)
+OUTPUT_DIRECTORY = build/mips
+# ---- MIRLO's MIPS toolchain (lang/mips: picolibc, compiler-rt, its runtime) --
+include $(MIRLO)/lang/mips/mips.mk
+LINKER_DIRECTORY = $(MIRLO)/lang/mips/linker
+MIPS_LIB        := $(MIPS_ROOT)build/game
+TARGET_PREFIX    = $(MIPS_BIN)
+OBJCOPY          = $(MIPS_OBJCOPY)
+# LiteX's COMMONFLAGS for the RISC-V build, less -Os (below) and -fexceptions
+CFLAGS := $(MIPS_GAME_CFLAGS) -MD -MP -O2 -g -fomit-frame-pointer -Wall -fno-builtin -fno-stack-protector \
+          -I$(MIPS_INCLUDE) -isystem $(MIPS_LIB)/include
+define compile
+@echo " CC      " $@ && $(MIPS_GCC) -c $(CFLAGS) $(1) $< -o $@
+endef
+define assemble
+@echo " AS      " $@ && $(MIPS_GCC) -c $(CFLAGS) -o $@ $<
+endef
+else
 OUTPUT_DIRECTORY = build
 
 # ---- LiteX toolchain plumbing (as MIRLO's lang/c/examples) ------------------
@@ -27,7 +50,6 @@ LITEX_ROOT_DIRECTORY = $(MIRLO)/litex
 BUILD_DIR        = $(LITEX_ROOT_DIRECTORY)/build/litex
 SOC_DIRECTORY    = $(LITEX_ROOT_DIRECTORY)/vendor/litex/litex/soc
 LINKER_DIRECTORY = $(MIRLO)/lang/linker
-MIRLO_C          = $(MIRLO)/lang/c
 
 include $(BUILD_DIR)/software/include/generated/variables.mak
 include $(SOC_DIRECTORY)/software/common.mak
@@ -35,6 +57,7 @@ include $(SOC_DIRECTORY)/software/common.mak
 # LiteX's common.mak compiles everything -Os. The game's code lives in SDRAM,
 # where size costs nothing, and -O2 is faster.
 CFLAGS := $(filter-out -Os,$(CFLAGS)) -O2
+endif
 # The host simulator (sim/) is the reference, so both builds must round and
 # alias the same way:
 #  - no fused multiply-add (rv32f has FMADD.S, x86-64 baseline does not);
@@ -48,7 +71,7 @@ CFLAGS += -ffp-contract=off -fsigned-char -fno-strict-aliasing
 # variables (triangles emitted) straight from its RAM. Its address comes from
 # the geom.elf the running bitstream was built with.
 NM       := $(TARGET_PREFIX)nm
-GEOM_ELF ?= $(MIRLO_C)/geom/build/geom.elf
+GEOM_ELF ?= $(MIRLO_C)/geom/build/$(if $(filter mips,$(CPU)),mips/)geom.elf
 GEOM_TRIS_EMITTED_ADDR := $(shell $(NM) $(GEOM_ELF) 2>/dev/null | sed -n 's/^\([0-9a-f]*\) [BbDd] geom_tris_emitted$$/0x\1u/p')
 ifeq ($(GEOM_TRIS_EMITTED_ADDR),)
 $(error cannot find geom_tris_emitted in $(GEOM_ELF) -- build $(MIRLO_C)/geom first)
@@ -161,7 +184,7 @@ $(SOUND_SYMS):
 	SM64_DIR=$(SM64_DIR_ABS) OUT=$(CURDIR)/$(SOUND_DIR) ./tools/build_sound_le.sh
 $(SOUND_DIR)/sound.bin: $(SOUND_SYMS)
 $(AUDIO_FW_H): $(wildcard audio/*.c audio/*.h)
-	$(MAKE) -C audio MIRLO=$(abspath $(MIRLO)) B=$(abspath $(OUTPUT_DIRECTORY)/audio)
+	$(MAKE) -C audio MIRLO=$(abspath $(MIRLO)) B=$(abspath $(OUTPUT_DIRECTORY)/audio) CPU=$(CPU)
 
 # ---- step 3: compile and link ------------------------------------------------------
 $(OUTPUT_DIRECTORY)/sm64/%.o: CFLAGS += $(GAME_INCLUDES) $(GAME_DEFINES) -w
@@ -193,11 +216,18 @@ $(OUTPUT_DIRECTORY)/init_asm.o: init_asm.S
 # One contiguous image from 0x40000000 (linker/regions.ld).
 $(OUTPUT_DIRECTORY)/super-mirlo-64.elf: $(OUTPUT_DIRECTORY)/init_asm.o $(SM64_OBJECTS) $(LOCAL_OBJECTS) \
 		linker/c-linker.ld linker/regions.ld $(SOUND_SYMS)
+ifeq ($(CPU),mips)
+	$(MIPS_LD) -EL -L $(CURDIR)/linker -L $(LINKER_DIRECTORY) -T $(CURDIR)/linker/c-linker.ld -N -o $@ \
+		$(OUTPUT_DIRECTORY)/init_asm.o $(SM64_OBJECTS) $(LOCAL_OBJECTS) $(SOUND_SYMS) \
+		--gc-sections $(subst -Wl$(comma),,$(WRAP_FLAGS)) -Map=$@.map \
+		--start-group $(MIPS_LIB)/libmirlo.a $(MIPS_LIB)/libc.a $(MIPS_LIB)/libm.a $(MIPS_LIB)/libcrt.a --end-group
+else
 	$(CC) $(LDFLAGS) -L $(CURDIR)/linker -L $(LINKER_DIRECTORY) -T $(CURDIR)/linker/c-linker.ld -N -o $@ \
 		$(OUTPUT_DIRECTORY)/init_asm.o $(SM64_OBJECTS) $(LOCAL_OBJECTS) $(SOUND_SYMS) \
 		$(PACKAGES:%=-L$(BUILD_DIR)/software/%) \
 		-Wl,--gc-sections $(WRAP_FLAGS) -Wl,-Map,$@.map \
 		$(LIBS:lib%=-l%) -lm -lgcc
+endif
 	chmod -x $@
 
 $(OUTPUT_DIRECTORY)/super-mirlo-64-program.bin: $(OUTPUT_DIRECTORY)/super-mirlo-64.elf

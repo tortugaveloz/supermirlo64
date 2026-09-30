@@ -220,24 +220,14 @@ static int load_sound_data(void)
     return 1;
 }
 
-/* ---- 60 Hz tick from the CLINT machine timer (MIRLO's lang/c/game/log.c
- * trap handler calls g_mtimer_hook) ---- */
-#define CLINT_REG(off) (*(volatile uint32_t *)(uintptr_t)(CLINT_BASE + (off)))
+/* ---- 60 Hz tick from the CPU's timer interrupt (MIRLO's lang/c/game/log.c
+ * trap handler calls g_mtimer_hook; lang/c/game/trap_arch.h: the CLINT's
+ * machine timer on RISC-V, COP0 Count/Compare on MIPS) ---- */
 static uint64_t s_next_tick;
 static const uint32_t TICK = CONFIG_CLOCK_FREQUENCY / 60u;
-
-static uint64_t mtime(void)
-{
-    uint32_t hi, lo;
-    do { hi = CLINT_REG(0xBFFC); lo = CLINT_REG(0xBFF8); } while (hi != CLINT_REG(0xBFFC));
-    return ((uint64_t)hi << 32) | lo;
-}
-static void arm(uint64_t t)
-{
-    CLINT_REG(0x4004) = 0xFFFFFFFFu;
-    CLINT_REG(0x4000) = (uint32_t)t;
-    CLINT_REG(0x4004) = (uint32_t)(t >> 32);
-}
+#include "trap_arch.h"     /* MIRLO's lang/c/game */
+#define mtime timer_now
+#define arm   timer_irq_at
 extern void (*volatile g_mtimer_hook)(void);
 void frame_isr_poll(void) __attribute__((weak));
 void frame_isr_poll(void) { }
@@ -283,7 +273,6 @@ void audio_hal_start(void)
     g_mtimer_hook = timer_tick;
     s_next_tick = mtime() + TICK;
     arm(s_next_tick);
-    __asm__ volatile("csrs mie, %0" :: "r"(1u << 7));       /* MTIE */
-    __asm__ volatile("csrs mstatus, %0" :: "r"(1u << 3));   /* MIE */
+    timer_irq_enable();
 }
 #endif

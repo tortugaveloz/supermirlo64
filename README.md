@@ -127,6 +127,24 @@ More control options are included in the core settings (Pocket menu → Core Set
 * R can be chosen to work as a modifier. In that mode, while R is pressed, X/B/Y/A become the four C buttons. In addition, the D-Pad works as a joystick press at 50%.
 * The stick and N64 D-pad sources can also be configured.
 
+## Building for MIRLO on MIPS (branch `mips`)
+
+MIRLO's branch `mips` (`MIRLO/docs/mips.md`) replaces the LiteX SoC with one
+where all three cores are MIPS. `MIRLO` points at that branch here. To build
+the game for it, use a MIPS GCC and binutils (`MIRLO/lang/mips/mips.mk` names
+them). The sound player still uses the RISC-V assembler (its output is data
+only), so keep that on your `PATH`.
+
+```sh
+(cd MIRLO/lang/mips && make -f lib.mk VARIANT=game && make -f lib.mk VARIANT=lite)
+(cd MIRLO/lang/c/geom && make CPU=mips)
+make CPU=mips -j$(nproc)   # -> build/mips/super-mirlo-64.bin
+```
+
+The bitstream comes from `MIRLO/projects_mips` (Quartus). Its geometry core
+firmware is `MIRLO/lang/c/geom/build/mips/geom.bin`, put in by
+`MIRLO/tools/mips_inits.py`.
+
 ## Building on macOS
 
 Tested on macOS 26, Apple silicon, with Homebrew. The build is the same as above, with these differences:

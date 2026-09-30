@@ -73,14 +73,8 @@ void osCreateMesgQueue(OSMesgQueue *mq, OSMesg *msg, s32 count)
 /* The audio tick runs from a timer interrupt on the Pocket (hal/audio_hal.c)
  * and uses message queues too (osPiStartDma's completion message), so a
  * queue update must not be split by it: mask interrupts around each one. */
-#if defined(__riscv) && !defined(GEOM_HOST_TEST)
-static inline unsigned long irq_save(void)
-{
-    unsigned long m;
-    __asm__ volatile("csrrci %0, mstatus, 8" : "=r"(m));
-    return m;
-}
-static inline void irq_restore(unsigned long m) { if (m & 8) __asm__ volatile("csrsi mstatus, 8"); }
+#if (defined(__riscv) || defined(__mips__)) && !defined(GEOM_HOST_TEST)
+#include "trap_arch.h"      /* irq_save() / irq_restore(), MIRLO's lang/c/game */
 #else
 static inline unsigned long irq_save(void) { return 0; }
 static inline void irq_restore(unsigned long m) { (void)m; }
