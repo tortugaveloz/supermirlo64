@@ -36,15 +36,20 @@ EB="--endian little --bitwidth $BITWIDTH"
 mkdir -p "$OUT/seq"
 cd "$SM64_DIR"
 
+# The decomp's assemble_sound.py has a "/\*" in a plain string literal, which
+# newer Pythons warn about (SyntaxWarning). The decomp stays unmodified, so
+# the warning is silenced here instead.
+PY="python3 -W ignore::SyntaxWarning"
+
 # 1. Banks + samples.
-python3 tools/assemble_sound.py "build/$VERSION/sound/samples/" sound/sound_banks/ \
+$PY tools/assemble_sound.py "build/$VERSION/sound/samples/" sound/sound_banks/ \
     "$OUT/sound_data.ctl" "$OUT/ctl_header" "$OUT/sound_data.tbl" "$OUT/tbl_header" $DEFS $EB
 
 # 2. Sequences: the .m64 files as extracted, plus 00_sound_player assembled here.
 "${CROSS}gcc" -x assembler-with-cpp -c -I include -I "build/$VERSION" $DEFS \
     sound/sequences/00_sound_player.s -o "$OUT/seq/00_sound_player.o"
 "${CROSS}objcopy" -j .rodata -O binary "$OUT/seq/00_sound_player.o" "$OUT/seq/00_sound_player.m64"
-python3 tools/assemble_sound.py --sequences "$OUT/sequences.bin" "$OUT/sequences_header" "$OUT/bank_sets" \
+$PY tools/assemble_sound.py --sequences "$OUT/sequences.bin" "$OUT/sequences_header" "$OUT/bank_sets" \
     sound/sound_banks/ sound/sequences.json \
     "$OUT/seq/00_sound_player.m64" sound/sequences/$VERSION/*.m64 $DEFS $EB
 

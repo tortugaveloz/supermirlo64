@@ -8,6 +8,10 @@
 #   - decomp/ with its assets extracted from YOUR ROM (make assets);
 #   - the RISC-V GCC on PATH.
 
+ifeq ($(filter-out 3.%,$(MAKE_VERSION)),)
+$(error GNU Make 4.0 or later is required (this is $(MAKE_VERSION)); on macOS: brew install make, then run gmake)
+endif
+
 SM64_DIR     ?= decomp
 SM64_ROM     ?= baserom.us.z64
 SM64_VERSION := us
@@ -118,20 +122,39 @@ all: $(OUTPUT_DIRECTORY)/super-mirlo-64.bin
 # generates the architecture-independent sources (text, level headers,
 # textures as C, animation and demo data, skyboxes). Its MIPS link fails at
 # the end, as expected: only the generated files are wanted.
+# The generated files the main build needs; `make assets` checks they exist.
+SM64_B := $(SM64_DIR_ABS)/build/$(SM64_VERSION)
+SM64_SKYBOXES := $(addprefix build/$(SM64_VERSION)/bin/,$(addsuffix _skybox.c,$(notdir $(basename $(wildcard $(SM64_DIR_ABS)/textures/skyboxes/*.png)))))
+ASSET_REQUIRED := $(SM64_B)/assets/mario_anim_data.c $(SM64_B)/assets/demo_data.c \
+                  $(SM64_B)/include/text_strings.h $(SM64_B)/include/level_headers.h \
+                  $(addprefix $(SM64_DIR_ABS)/,$(SM64_SKYBOXES))
+# nproc is GNU-only; macOS has sysctl
+JOBS ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+ASSETS_LOG := $(CURDIR)/$(OUTPUT_DIRECTORY)/assets.log
+
 assets:
 	@if [ ! -e "$(SM64_DIR_ABS)/baserom.$(SM64_VERSION).z64" ]; then \
 		ln -s "$(abspath $(SM64_ROM))" "$(SM64_DIR_ABS)/baserom.$(SM64_VERSION).z64"; \
 	fi
+	@mkdir -p $(dir $(ASSETS_LOG))
 	cd $(SM64_DIR_ABS) && python3 extract_assets.py $(SM64_VERSION)
-	-cd $(SM64_DIR_ABS) && PATH="$(FAKE_MIPS_BIN):$$PATH" $(MAKE) VERSION=$(SM64_VERSION) -k -j$$(nproc) \
+	@echo "Generating the decomp's sources (log: $(ASSETS_LOG))"
+	-@cd $(SM64_DIR_ABS) && PATH="$(FAKE_MIPS_BIN):$$PATH" $(MAKE) VERSION=$(SM64_VERSION) -k -j$(JOBS) \
 		build/$(SM64_VERSION)/assets/mario_anim_data.c \
 		build/$(SM64_VERSION)/assets/demo_data.c \
 		build/$(SM64_VERSION)/include/text_strings.h \
 		build/$(SM64_VERSION)/include/level_headers.h \
-		$(addprefix build/$(SM64_VERSION)/bin/,$(addsuffix _skybox.c,$(notdir $(basename $(wildcard $(SM64_DIR_ABS)/textures/skyboxes/*.png))))) \
-		> /dev/null 2>&1
-	-cd $(SM64_DIR_ABS) && PATH="$(FAKE_MIPS_BIN):$$PATH" $(MAKE) VERSION=$(SM64_VERSION) -k -j$$(nproc) \
-		> /dev/null 2>&1
+		$(SM64_SKYBOXES) \
+		> $(ASSETS_LOG) 2>&1
+	-@cd $(SM64_DIR_ABS) && PATH="$(FAKE_MIPS_BIN):$$PATH" $(MAKE) VERSION=$(SM64_VERSION) -k -j$(JOBS) \
+		>> $(ASSETS_LOG) 2>&1
+	@missing=0; for f in $(ASSET_REQUIRED); do \
+		if [ ! -s "$$f" ]; then echo "make assets: missing generated file: $$f"; missing=1; fi; \
+	done; \
+	if [ $$missing = 1 ]; then \
+		echo "--- last lines of $(ASSETS_LOG) ---"; grep -iE 'error|not found|No such' $(ASSETS_LOG) | head -20; \
+		echo "(the final MIPS link failing is expected; the files above are not)"; exit 1; \
+	fi; echo "make assets: all generated files present"
 
 # ---- step 2: the sound data, and the audio core's firmware ---------------------
 $(SOUND_SYMS):
