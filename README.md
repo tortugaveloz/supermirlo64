@@ -2,9 +2,9 @@
 
 Super Mario 64 on [Mirlo](https://github.com/tortugaveloz/MIRLO), a RISC-V computer for the Analogue Pocket inspired by the N64 hardware.
 
-It is a port of the [n64decomp/sm64](https://github.com/n64decomp/sm64) decompilation. The engine is compiled unchanged; this repository adds:
+It is a port of SM64, based on the [n64decomp/sm64](https://github.com/n64decomp/sm64) decompilation. The engine is compiled unchanged; this repository adds:
 * a libultra layer (`hal/`);
-* a translator from the game's F3DEX2 display lists to Mirlo's display lists (`f3d/`);
+* a translator from the display lists the engine builds to Mirlo's display lists (`f3d/`). The original game uses the N64's Fast3D microcode; the decomp is built here with its F3DEX2 command encoding, and that is what the translator reads;
 * the N64 audio microcode as the audio core's firmware (`audio/`).
 
 The game CPU runs the game, Mirlo's geometry core does what the N64's RSP did (transform, lighting, clipping, triangle setup), and MRDP draws. It runs at the N64's own 320 × 240.
