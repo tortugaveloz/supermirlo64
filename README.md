@@ -35,13 +35,12 @@ The following steps assume Ubuntu 24.04 (x86-64). Notes for [macOS](#building-on
 sudo apt install build-essential git python3 python3-venv pkgconf
 ```
 
-**A RISC-V GCC with multilib** (`rv32imafc`/`ilp32f` and `rv32im`/`ilp32`) on your `PATH`, named `riscv-none-elf-*`. The xPack build works:
+**A RISC-V GCC with multilib** (`rv32imafc`/`ilp32f` and `rv32im`/`ilp32`) on your `PATH`, named `riscv-none-elf-*`. The xPack build works. Unpack it wherever you like (the commands below use the current directory) and, from that directory, add it to your `PATH` (repeat the `export` in every new shell):
 
 ```bash
-mkdir -p ~/opt && cd ~/opt
 wget https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v15.2.0-1/xpack-riscv-none-elf-gcc-15.2.0-1-linux-x64.tar.gz
 tar xf xpack-riscv-none-elf-gcc-15.2.0-1-linux-x64.tar.gz
-export PATH=~/opt/xpack-riscv-none-elf-gcc-15.2.0-1/bin:$PATH
+export PATH="$PWD/xpack-riscv-none-elf-gcc-15.2.0-1/bin:$PATH"
 ```
 
 **Python 3.10 or later.** Tested with 3.12 and 3.14. (LiteX/Migen infer object names from variable names by reading bytecode; `MIRLO/litex/vendor/setup.sh` patches Migen so that this works on current Python versions.)
@@ -58,7 +57,8 @@ pip install meson ninja pyserial packaging
 ```bash
 git clone --recursive https://github.com/tortugaveloz/supermirlo64.git
 cd supermirlo64
-MIRLO/litex/vendor/setup.sh      # LiteX's submodules + Mirlo's patches
+git submodule update --init --recursive    # in case the clone left submodules unchecked-out
+MIRLO/litex/vendor/setup.sh                # LiteX's submodules + Mirlo's patches
 ```
 
 ### 3. Mirlo
@@ -131,14 +131,15 @@ brew install make python@3.12          # gmake 4.x; Python
 * **GNU Make:** Apple ships make 3.81, which cannot run the decomp's Makefile (it uses `!=`, from 4.0). Use `gmake` instead of `make` in every step, or put Homebrew's `gnubin` first on your `PATH`: `export PATH="$(brew --prefix make)/libexec/gnubin:$PATH"`. The top-level Makefile stops with a message if it is run by make 3.81.
 * **RISC-V GCC:** the xPack build for macOS, `darwin-arm64` (Apple silicon) or `darwin-x64` (Intel):
 
+  Unpack it wherever you like and, from that directory:
+
   ```bash
-  mkdir -p ~/opt && cd ~/opt
   curl -LO https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v15.2.0-1/xpack-riscv-none-elf-gcc-15.2.0-1-darwin-arm64.tar.gz
   tar xf xpack-riscv-none-elf-gcc-15.2.0-1-darwin-arm64.tar.gz
-  export PATH=~/opt/xpack-riscv-none-elf-gcc-15.2.0-1/bin:$PATH
+  export PATH="$PWD/xpack-riscv-none-elf-gcc-15.2.0-1/bin:$PATH"
   ```
 
-  If macOS refuses to run the binaries because they were downloaded, `xattr -dr com.apple.quarantine ~/opt/xpack-riscv-none-elf-gcc-15.2.0-1`.
+  If macOS refuses to run the binaries because they were downloaded, `xattr -dr com.apple.quarantine xpack-riscv-none-elf-gcc-15.2.0-1`.
 * **Python:** `python3.12 -m venv ~/.venvs/mirlo`, then the `pip install` from step 1. Newer versions work too.
 * **ROM checksum:** `shasum baserom.us.z64` instead of `sha1sum`.
 * **Job count:** the Makefile finds it with `sysctl` when `nproc` does not exist; use `-j$(sysctl -n hw.ncpu)` for the main build.
@@ -146,8 +147,10 @@ brew install make python@3.12          # gmake 4.x; Python
 The whole sequence:
 
 ```bash
-export PATH="$(brew --prefix make)/libexec/gnubin:$HOME/opt/xpack-riscv-none-elf-gcc-15.2.0-1/bin:$PATH"
+export PATH="$(brew --prefix make)/libexec/gnubin:$PATH"
+export PATH="/path/to/xpack-riscv-none-elf-gcc-15.2.0-1/bin:$PATH"   # where you unpacked it
 source ~/.venvs/mirlo/bin/activate
+git submodule update --init --recursive
 MIRLO/litex/vendor/setup.sh
 (cd MIRLO/litex && make) && (cd MIRLO/lang/c/geom && make) && (cd MIRLO/litex && make)
 cp /path/to/your.z64 baserom.us.z64
