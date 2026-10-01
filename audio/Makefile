@@ -1,35 +1,16 @@
 # The audio core's firmware for Super Mirlo 64: the N64's audio RSP task (the
 # ABI command lists src/audio/synthesis.c builds) and its AI, on Mirlo's audio
-# core (rv32i + Zmmul, no FPU, no divider, no caches; with CPU=mips, MIRLO's
-# MIPS SoC's mips_lite). Built on MIRLO's lang/c/audio runtime (start.S,
-# nolibc.c, audio.ld, audio_hw.h, audio_cfu.h).
+# core (MIRLO's mips_lite: MIPS32's integer subset, no FPU, no caches). Built
+# on MIRLO's lang/c/audio runtime (start_mips.S, nolibc.c, audio_mips.ld,
+# audio_hw.h, audio_cfu.h).
 #
 # Nothing here is in the bitstream: the game embeds the images through
 # $(B)/audio_fw.h and loads them into the core at boot (hal/audio_hal.c).
 
 MIRLO   ?= ../MIRLO
-CROSS   ?= riscv-none-elf-
-CC       = $(CROSS)gcc
-OBJCOPY  = $(CROSS)objcopy
-SIZE     = $(CROSS)size
-
 RT       = $(MIRLO)/lang/c/audio
-GEN_CSR  = $(MIRLO)/litex/build/litex/software/include/generated/csr.h
 B       ?= ../build/audio
 
-ARCHFLAGS = -march=rv32i_zmmul_zicsr -mabi=ilp32
-CFLAGS    = $(ARCHFLAGS) -O2 -g -ffreestanding -nostdlib -fno-pic -mno-relax -fsigned-char \
-            -fno-strict-aliasing -Wall -Wextra -ffunction-sections -fdata-sections -std=gnu11 \
-            -DABI_STATE_CACHE -I. -I$(RT) -I$(B) $(CFLAGS_EXTRA)
-LDFLAGS   = $(ARCHFLAGS) -nostdlib -Wl,--gc-sections -Wl,-Map,$(B)/audio.map -T $(RT)/audio.ld
-
-START = start
-LDSCRIPT = $(RT)/audio.ld
-LINK  = $(CC) $(LDFLAGS)
-
-# CPU=mips: MIRLO's MIPS SoC (its branch `mips`): the audio core is mips_lite
-# (rtl/mips/mips_lite.sv), little-endian, the CFU as MIPS opcode 0x1F.
-ifeq ($(CPU),mips)
 include $(MIRLO)/lang/mips/mips.mk
 GEN_CSR   = $(MIRLO)/lang/mips/include/generated/csr.h
 CC        = $(MIPS_GCC)
@@ -42,7 +23,6 @@ CFLAGS    = $(ARCHFLAGS) -O2 -g -ffreestanding -nostdlib -fsigned-char \
 START     = start_mips
 LDSCRIPT  = $(RT)/audio_mips.ld
 LINK      = $(MIPS_LD) -EL --gc-sections -Map=$(B)/audio.map -T $(LDSCRIPT)
-endif
 
 OBJS = $(B)/$(START).o $(B)/abi_main.o $(B)/abi.o $(B)/nolibc.o
 
@@ -73,9 +53,7 @@ $(B)/%.o: %.c $(B)/generated_csr_addrs.h abi.h abi_mailbox.h | $(B)
 
 $(B)/audio.elf: $(OBJS) $(LDSCRIPT)
 	$(LINK) -o $@ $(OBJS)
-ifeq ($(CPU),mips)
 	python3 $(MIRLO)/lang/c/mips/check_isa.py $(MIPS_BIN)objcopy $@ .text || { rm -f $@; false; }
-endif
 	$(SIZE) $@
 
 $(B)/audio_imem.bin: $(B)/audio.elf

@@ -13,7 +13,7 @@
 #include <stdint.h>
 #include "gdl_build.h"
 
-typedef struct { uint32_t w0; uintptr_t w1; } f3d_word_t;  /* w1 holds a pointer; uintptr_t == uint32_t on the rv32 target, matching Gfx */
+typedef struct { uint32_t w0; uintptr_t w1; } f3d_word_t;  /* w1 holds a pointer; uintptr_t == uint32_t on the 32-bit target, matching Gfx */
 
 /* Reset the translator's tracked state (matrix target, geometry mode, tex). */
 void f3d_emit_reset(void);

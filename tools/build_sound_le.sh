@@ -30,7 +30,9 @@ VERSION="${SM64_VERSION:-us}"
 BITWIDTH="${BITWIDTH:-32}"
 OUT="${OUT:-$HERE/build/sound_le$([ "$BITWIDTH" = 64 ] && echo 64 || true)}"
 SOUND_BASE="${SOUND_BASE:-0x41700000}"
-CROSS="${CROSS:-riscv-none-elf-}"
+CROSS="${CROSS:-mips-linux-gnu-}"
+SOUND_CC="${SOUND_CC:-${CROSS}gcc -EL}"         # any target: the player is data only
+SOUND_OBJCOPY="${SOUND_OBJCOPY:-${CROSS}objcopy}"
 DEFS="-DVERSION_US=1 -DF3D_OLD=1 -D_FINALROM=1"
 EB="--endian little --bitwidth $BITWIDTH"
 mkdir -p "$OUT/seq"
@@ -46,9 +48,9 @@ $PY tools/assemble_sound.py "build/$VERSION/sound/samples/" sound/sound_banks/ \
     "$OUT/sound_data.ctl" "$OUT/ctl_header" "$OUT/sound_data.tbl" "$OUT/tbl_header" $DEFS $EB
 
 # 2. Sequences: the .m64 files as extracted, plus 00_sound_player assembled here.
-"${CROSS}gcc" -x assembler-with-cpp -c -I include -I "build/$VERSION" $DEFS \
+$SOUND_CC -x assembler-with-cpp -c -I include -I "build/$VERSION" $DEFS \
     sound/sequences/00_sound_player.s -o "$OUT/seq/00_sound_player.o"
-"${CROSS}objcopy" -j .rodata -O binary "$OUT/seq/00_sound_player.o" "$OUT/seq/00_sound_player.m64"
+$SOUND_OBJCOPY -j .rodata -O binary "$OUT/seq/00_sound_player.o" "$OUT/seq/00_sound_player.m64"
 $PY tools/assemble_sound.py --sequences "$OUT/sequences.bin" "$OUT/sequences_header" "$OUT/bank_sets" \
     sound/sound_banks/ sound/sequences.json \
     "$OUT/seq/00_sound_player.m64" sound/sequences/$VERSION/*.m64 $DEFS $EB

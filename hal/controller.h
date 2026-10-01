@@ -10,8 +10,8 @@
 // Mapping: fixed (the Pocket's Controls menu remaps the physical buttons):
 // D-pad -> control stick, A/B -> A/B, X/Y -> C-right/left, L1 -> Z, R1 -> R,
 // "+" -> Start, "-" -> C-down. Core settings: the stick and N64 D-pad
-// sources, "Start = Select+Start" and "R =
-// modifier" (R1 held: X/B/Y/A are C-up/down/left/right, the D-pad half a
+// sources, the N64 L button (a Dock pad's L2/R2/L3/R3), "Start =
+// Select+Start" and "R = modifier" (R1 held: X/B/Y/A are C-up/down/left/right, the D-pad half a
 // stick; no N64 R). controller.c has the register layout.
 void hal_read_controller(OSContPad *pad, int index);
 

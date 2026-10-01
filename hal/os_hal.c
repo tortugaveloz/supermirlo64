@@ -10,13 +10,9 @@
 #include <generated/csr.h>
 
 // ---- Timers -----------------------------------------------------------------
-// The `cycle`/`cycleh` user CSRs (0xC00/0xC80) are NOT implemented by this
-// SoC's VexRiscv-SMP config -- reading them is an illegal instruction (checked
-// against the generated core Verilog: execute_CsrPlugin_illegalAccess allows
-// `time`/`timeh` (0xC01/0xC81) but not `cycle`). A `csrr cycle` here traps and,
-// with no handler installed, hangs the CPU silently. Use LiteX's timer0 uptime
-// counter instead: a real free-running 64-bit cycle counter on the CSR bus
-// (with_uptime=True), read coherently via the latch.
+// TIMER0's uptime: a free-running 64-bit count of system clock cycles,
+// read coherently via the latch (MIRLO's docs/control.md). (On the RISC-V
+// Mirlo the CPU's own `cycle` CSR was not implemented -- reading it trapped.)
 static uint64_t rdcycle64(void)
 {
     timer0_uptime_latch_write(1);

@@ -9,6 +9,7 @@
 #define KEY_DPAD_RIGHT (1u << 3)
 #define KEY_SELECT (1u << 14)
 #define KEY_START (1u << 15)
+#define KEY_TYPE(k) ((k) >> 28)     // 1 Pocket, 2 dock pad without analog, 3 dock pad with analog
 
 // Full deflection on the N64's documented -80..80 stick range.
 #define DPAD_STICK 80
@@ -24,8 +25,12 @@
  * The core settings left (interact.json, apf_interact slots 0/1, bridge
  * 0x1000_0100/0x1000_0104):
  *   slot 0 [14:10] "R = modifier" (id 212, 0x10000110, the old Z field): 1 on
+ *          [24:20] N64 L (id 213, 0x10000118): 0 none, else 1 + an APF_INPUT
+ *                  key bit (11 L2, 12 R2, 13 L3, 14 R3)
  *   slot 1 [21:20] stick source (0 D-pad, 1 left analog stick, 2 none),
  *          [23:22] N64 D-pad source (0 none, 1 Pocket D-pad, 2 right stick),
+ *          (the analog sources only on a pad the dock reports as analog, type
+ *          3: without one "L stick" falls back to the D-pad, "R stick" to none)
  *          [24] Show FPS, [25] Start = Select+Start */
 #define MAP0 (5u << 0 | 6u << 5 | 9u << 10 | 16u << 15 | 0u << 20 | 10u << 25)   /* A B Z Start L R */
 #define MAP1 (0u << 0 | 15u << 5 | 8u << 10 | 7u << 15)                          /* C-up/down/left/right */
@@ -42,9 +47,11 @@ static inline int mapped(uint32_t key, uint32_t reg, int field)
 }
 
 /* An analog axis (0..255, 0x80 centre) on the N64's -80..80, with a small
- * dead zone around the centre. Not verified on hardware: the dock's raw
- * register was once seen idling at 0x80008000, which does not fit the
- * documented layout -- hence the D-pad default. */
+ * dead zone around the centre. The D-pad stays the default: with some pads
+ * the dock does not deliver the documented layout. Measured 2026-09-30 on a
+ * type-3 pad: the Y bytes were clean 8-bit axes, but each X byte idled at
+ * about +80 with +-15 of noise and wrapped around while the stick moved
+ * straight up or down -- the low byte of a wider axis, not its top 8 bits. */
 static int8_t axis(uint32_t raw, int up)
 {
     int v = (int)(raw & 0xFFu) - 128;
@@ -95,15 +102,19 @@ void hal_read_controller(OSContPad *pad, int index)
     if (mapped(key, m0, 0)) button |= CONT_A;
     if (mapped(key, m0, 1)) button |= CONT_B;
     if (mapped(key, m0, 2)) button |= CONT_G;      // Z
-    if (mapped(key, m0, 4)) button |= CONT_L;
+    if (mapped(key, set0, 4)) button |= CONT_L;    // a core setting, not in MAP0
     if (mapped(key, m0, 5)) button |= CONT_R;
     if (mapped(key, m1, 0)) button |= CONT_E;      // C-up
     if (mapped(key, m1, 1)) button |= CONT_D;      // C-down
     if (mapped(key, m1, 2)) button |= CONT_C;      // C-left
     if (mapped(key, m1, 3)) button |= CONT_F;      // C-right
 
+    const int analog = KEY_TYPE(key) == 3u;
+    uint32_t stick = (set1 >> 20) & 3u;
+    if (stick == 1u && !analog) stick = 0;      // "L stick" on a pad without one: the D-pad
+
     int8_t sx = 0, sy = 0;
-    switch ((set1 >> 20) & 3u) {
+    switch (stick) {
     case 0: {   // the D-pad, at full deflection (diagonals too: SM64 clamps the magnitude) -- half under the R modifier
         int8_t d = rmod ? DPAD_STICK / 2 : DPAD_STICK;
         if (key & KEY_DPAD_LEFT) sx -= d;
@@ -133,6 +144,7 @@ void hal_read_controller(OSContPad *pad, int index)
         if (key & KEY_DPAD_RIGHT) button |= CONT_RIGHT;
         break;
     case 2: {   // the right stick, as four digital directions
+        if (!analog) break;
         int rx = (int)((joy >> 16) & 0xFFu) - 128, ry = (int)((joy >> 24) & 0xFFu) - 128;
         if (rx < -64) button |= CONT_LEFT;
         if (rx > 64) button |= CONT_RIGHT;

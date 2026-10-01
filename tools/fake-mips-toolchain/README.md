@@ -19,7 +19,8 @@ generate all of that target's real prerequisites (the `.inc.c` files we
 actually want) before it reaches the final "compile with $(CC)" recipe step —
 at which point one of these stubs runs, prints a message, and exits 1. That
 final failure is expected and harmless: we throw away the recipe's own
-compile step and recompile the same reused sources ourselves, for
-`riscv32imafc`, in the top-level `Makefile`.
+compile step and recompile the same reused sources ourselves, for Mirlo's
+game CPU, in the top-level `Makefile`.
 
-Do not use these to actually build anything MIPS-related.
+Do not use these to actually build anything: the real compiler is MIRLO's
+(`MIRLO/lang/mips/mips.mk`).

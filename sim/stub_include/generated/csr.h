@@ -1,4 +1,4 @@
-/* Host-simulator fake for litex/build/.../generated/csr.h.
+/* Host-simulator fake for MIRLO's lang/mips/include/generated/csr.h.
  * Only the accessors the reused Pocket HAL (.c) files touch are provided.
  * Semantics chosen so the synchronous superloop HAL makes progress:
  *   - vblank "triggered" every poll   -> osRecvMesg blocking path always drains
