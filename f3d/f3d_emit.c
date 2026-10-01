@@ -5,13 +5,6 @@
 #include "geom_pipeline.h"   /* GEOM_FB_HRES */
 #include "f3d_emit.h"
 
-/* Where the big tables go: plain .bss on the game CPU; MIRLO's geom core
- * (which can run this translator itself, GDL_F3D) puts them in SDRAM --
- * its own RAM is 16 KiB. */
-#ifndef F3D_BIG
-#define F3D_BIG
-#endif
-
 /* a runaway guard: commands walked this display list */
 static long     s_walk_iters;
 #define WALK_ITER_CAP  400000L
@@ -164,7 +157,7 @@ static int32_t   s_fold_d[3];        /* whole units, added to every vertex */
  * scale this way -- the dialog box sat at the scaled offset, above its
  * text). So a G_MTX_MUL goes to the geom core as the LOAD of the product. */
 #define F3D_MV_DEPTH 32
-static int32_t   s_mv[F3D_MV_DEPTH][16] F3D_BIG;
+static int32_t   s_mv[F3D_MV_DEPTH][16];
 static int       s_mv_sp;
 static int32_t   s_vp_scale[4], s_vp_trans[4];   /* S15.16 */
 static int       s_vp_valid;
@@ -649,7 +642,7 @@ typedef struct sem_node {
 } sem_node_t;
 #define SEM_NODE_WORDS ((uint32_t)((sizeof(sem_node_t) + 7u) / 8u * 2u))
 #define SEM_POOL_HASH 1024u
-static uint32_t          s_sem_pool[SEM_POOL_HASH] F3D_BIG;
+static uint32_t          s_sem_pool[SEM_POOL_HASH];
 static const f3d_sem_t  *s_sem_ref;
 static int               s_sem_stale;
 static void sem_sync(void) {
@@ -691,7 +684,7 @@ typedef struct dlc_entry {
 #define DLC_HASH    4096u
 #define DLC_VARIANTS 32          /* entry states kept per list before giving up on it (16 left Cool, Cool Mountain with ~4 lists a frame walked in full) */
 int f3d_dlc_off;                 /* 1: walk everything (A/B measurement) */
-static uint32_t  s_dlc_hash[DLC_HASH] F3D_BIG;   /* word offset of the newest entry, 0 = none */
+static uint32_t  s_dlc_hash[DLC_HASH];   /* word offset of the newest entry, 0 = none */
 static uint32_t *s_dlc_base;             /* this half */
 static uint32_t  s_dlc_words, s_dlc_used; /* half size, used (words 0..1 are never an entry) */
 static int       s_dlc_half = -1;

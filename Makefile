@@ -75,11 +75,6 @@ SM64_DEFINES  := -DVERSION_US=1 -D_LANGUAGE_C -DNON_MATCHING=1 -DAVOID_UB=1 \
 GAME_INCLUDES := -I$(CURDIR)/include $(SM64_INCLUDES) -I$(CURDIR)/f3d -I$(CURDIR)/hal \
                  -I$(CURDIR)/audio -I$(MIRLO_C)/game -I$(MIRLO_C)/geom -I$(MIRLO_C)/audio
 GAME_DEFINES  := $(SM64_DEFINES) -DNO_SEGMENTED_MEMORY -DPORT_FULL_GAME
-# GEOM_F3D=1: the geom core translates the display lists (MIRLO's GDL_F3D;
-# its firmware built with F3D_EMIT=f3d/f3d_emit.c), not the game CPU
-ifeq ($(GEOM_F3D),1)
-GAME_DEFINES  += -DPORT_GEOM_F3D
-endif
 
 # The upstream Makefile's own C sources (src/, levels/, the libultra float
 # helpers lib/src/gu*.c) and data (actors, behaviours, the generated assets).

@@ -28,23 +28,6 @@ void osSpTaskStartGo(OSTask *task)
     }
     gdl_cur_t c;
     frame_begin(&c);                         /* a GDL slot; waits for one if all are in flight */
-#ifdef PORT_GEOM_F3D
-    /* The geom core translates the list itself, as the N64's RSP did
-     * (MIRLO's GDL_F3D): the static lists -- the image's read-only data --
-     * are cached in the same arena the game CPU's translator would use.
-     * The game builds the next frame in the other gfx pool meanwhile;
-     * frame_submit() hands this one over only once the geom core is done
-     * with the last, so this pool is never rewritten under it. */
-    {
-        extern const char _frodata[], _erodata[];
-        extern void *f3d_dlc_arena(uint32_t *bytes);
-        uint32_t ab; void *arena = f3d_dlc_arena(&ab);
-        gdl_f3d(&c, (const void *) task->t.data_ptr, frame_clear_word(), _frodata, _erodata, arena, ab);
-        gdl_end(&c);
-        frame_submit(&c);
-        return;
-    }
-#endif
     f3d_emit_reset();
     uint64_t t_emit = frame_uptime_cycles();
     f3d_emit_display_list((const f3d_word_t *) task->t.data_ptr, &c);
