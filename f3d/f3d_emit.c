@@ -5,6 +5,13 @@
 #include "geom_pipeline.h"   /* GEOM_FB_HRES */
 #include "f3d_emit.h"
 
+/* Where the big tables go: plain .bss on the game CPU; MIRLO's geom core
+ * (which can run this translator itself, GDL_F3D) puts them in SDRAM --
+ * its own RAM is 16 KiB. */
+#ifndef F3D_BIG
+#define F3D_BIG
+#endif
+
 /* a runaway guard: commands walked this display list */
 static long     s_walk_iters;
 #define WALK_ITER_CAP  400000L
@@ -76,12 +83,12 @@ typedef struct {
     uint32_t  lightcol[8];
     int32_t   tex_on, numlights, timg_fmt, timg_siz, tile_cms, tile_cmt, tile_masks, tile_maskt;
     int32_t   tile_pal, ts_w, ts_h, tile_fmt, tile_siz, tile_valid, texbind_dirty;
-    float     tex_sscale, tex_tscale;
+    uint32_t  tex_sscale, tex_tscale;   /* gsSPTexture's scales, S15.16 (0x10000 = 1.0) */
     uintptr_t timg_ptr, tlut_ptr;
 } f3d_sem_t;
 static f3d_sem_t s_sem = {
     .env_rgba = 0xffffffffu, .prim_rgba = 0xffffffffu,
-    .tex_sscale = 1.0f, .tex_tscale = 1.0f,
+    .tex_sscale = 0x10000u, .tex_tscale = 0x10000u,
 };
 #define s_geomode         (s_sem.geomode)
 #define s_tex_render_size (s_sem.tex_render_size)
@@ -157,9 +164,9 @@ static int32_t   s_fold_d[3];        /* whole units, added to every vertex */
  * scale this way -- the dialog box sat at the scaled offset, above its
  * text). So a G_MTX_MUL goes to the geom core as the LOAD of the product. */
 #define F3D_MV_DEPTH 32
-static int32_t   s_mv[F3D_MV_DEPTH][16];
+static int32_t   s_mv[F3D_MV_DEPTH][16] F3D_BIG;
 static int       s_mv_sp;
-static float     s_vp_scale[4], s_vp_trans[4];
+static int32_t   s_vp_scale[4], s_vp_trans[4];   /* S15.16 */
 static int       s_vp_valid;
 /* s_othermode_h: s_sem */
 /* othermode L (render mode) and the GDL_RM_* flags derived from it */
@@ -191,7 +198,7 @@ void f3d_emit_reset(void) {
     s_tile_cms = s_tile_cmt = 0; s_tile_masks = s_tile_maskt = 0; s_tile_pal = 0;
     s_ts_w = s_ts_h = 0; s_tlut_ptr = 0; s_tile_valid = 0;
     s_texbind_dirty = 0; s_texbind_emitted = 0;
-    s_tex_sscale = s_tex_tscale = 1.0f;
+    s_tex_sscale = s_tex_tscale = 0x10000u;
     s_proj_valid = 0; s_vp_valid = 0; s_proj_ortho = 0;
     s_emv_valid = 0; s_fold = 0;
     s_othermode_h = 2u << 12;   /* G_TF_BILERP until the frame's init_rdp says otherwise */
@@ -244,7 +251,7 @@ static void emit_texbind_if_needed(gdl_cur_t *out) {
      * as IA16 -- with twice the stride -- and drew four stray dots. */
     /* othermode H: copy mode [21:20] == 2 or texture filter [13:12] == G_TF_POINT */
     int point = ((s_othermode_h >> 20) & 3u) == 2u || ((s_othermode_h >> 12) & 3u) == 0u;
-    gdl_texbind_scaled(out, s_tile_valid ? s_tile_fmt : s_timg_fmt,
+    gdl_texbind_scaled_fx(out, s_tile_valid ? s_tile_fmt : s_timg_fmt,
                 s_tile_valid ? s_tile_siz : s_timg_siz, s_tile_cms, s_tile_cmt,
                 s_tile_pal | (point ? GDL_TEXBIND_POINT : 0),
                 w, h, (const void *)s_timg_ptr, (const void *)s_tlut_ptr,
@@ -445,8 +452,7 @@ static void emit_geomode_if_changed(gdl_cur_t *out) {
     if (gm != s_lighting_emitted) { gdl_geomode(out, gm); s_lighting_emitted = gm; }
 }
 static void emit_texnorm(gdl_cur_t *out) {
-    float inv = (s_tex_on && s_tex_render_size > 0) ? 1.0f / (float)s_tex_render_size : 0.0f;
-    gdl_texnorm(out, inv);
+    gdl_texnorm_size(out, (s_tex_on && s_tex_render_size > 0) ? (uint32_t)s_tex_render_size : 0u);
 }
 
 /* G_TEXRECT: a screen-space textured rectangle (the HUD, menu text, ...).
@@ -457,8 +463,8 @@ static void emit_texnorm(gdl_cur_t *out) {
  * S15.16. The full-screen viewport is set for it and the game's projection
  * and viewport are put back after; the texture is bound without
  * gsSPTexture's scale, which does not apply to rectangles. */
-static void emit_viewport(gdl_cur_t *out, const float scale[4], const float trans[4]) {
-    gdl_viewport(out, scale, trans);
+static void emit_viewport(gdl_cur_t *out, const int32_t scale[4], const int32_t trans[4]) {
+    gdl_viewport_fx(out, scale, trans);
 }
 
 /* 2D translations folded into the vertices. SM64 draws a string glyph after
@@ -518,7 +524,7 @@ static void emit_rect_quad(gdl_cur_t *out, int32_t xl, int32_t yl, int32_t xh, i
     static const int32_t ident[16] = { 65536, 0, 0, 0,  0, 65536, 0, 0,  0, 0, 65536, 0,  0, 0, 0, 65536 };
     static const int32_t ortho[16] = { 65536, 0, 0, 0,  0, -87381, 0, 0,  0, 0, 0, 0,
                                        -640 * 65536, 640 * 65536, 0, 640 * 65536 };
-    static const float vps[4] = { 160.0f, 120.0f, 127.75f, 0.0f };   /* the full screen, as SM64's own viewport */
+    static const int32_t vps[4] = { 160 << 16, 120 << 16, 511 << 14, 0 };   /* the full screen, as SM64's own viewport (127.75) */
     gdl_mtx_push(out);
     gdl_mtx_load_fx(out, GDL_MTX_TARGET_MODELVIEW, ident);
     gdl_mtx_load_fx(out, GDL_MTX_TARGET_PROJECTION, ortho);
@@ -553,8 +559,8 @@ static void emit_texrect(gdl_cur_t *out, uint32_t w0, uint32_t w1, uint32_t half
      * pixels land mid-texel with no adjustment. */
     int32_t s1 = s0 + ((dsdx * (xh - xl)) >> 7), t1 = t0 + ((dtdy * (yh - yl)) >> 7);
 
-    int tex_on = s_tex_on; float ss = s_tex_sscale, ts = s_tex_tscale;
-    s_tex_on = 1; s_tex_sscale = s_tex_tscale = 1.0f; s_texbind_dirty = 1;
+    int tex_on = s_tex_on; uint32_t ss = s_tex_sscale, ts = s_tex_tscale;
+    s_tex_on = 1; s_tex_sscale = s_tex_tscale = 0x10000u; s_texbind_dirty = 1;
     /* Copy mode (the HUD) writes texels as they are: no combiner, no Z, and
      * the alpha compare drops the transparent ones -- as a texel-only blend. */
     int copy = ((s_othermode_h >> 20) & 3u) == 2u;
@@ -643,7 +649,7 @@ typedef struct sem_node {
 } sem_node_t;
 #define SEM_NODE_WORDS ((uint32_t)((sizeof(sem_node_t) + 7u) / 8u * 2u))
 #define SEM_POOL_HASH 1024u
-static uint32_t          s_sem_pool[SEM_POOL_HASH];
+static uint32_t          s_sem_pool[SEM_POOL_HASH] F3D_BIG;
 static const f3d_sem_t  *s_sem_ref;
 static int               s_sem_stale;
 static void sem_sync(void) {
@@ -685,7 +691,7 @@ typedef struct dlc_entry {
 #define DLC_HASH    4096u
 #define DLC_VARIANTS 32          /* entry states kept per list before giving up on it (16 left Cool, Cool Mountain with ~4 lists a frame walked in full) */
 int f3d_dlc_off;                 /* 1: walk everything (A/B measurement) */
-static uint32_t  s_dlc_hash[DLC_HASH];   /* word offset of the newest entry, 0 = none */
+static uint32_t  s_dlc_hash[DLC_HASH] F3D_BIG;   /* word offset of the newest entry, 0 = none */
 static uint32_t *s_dlc_base;             /* this half */
 static uint32_t  s_dlc_words, s_dlc_used; /* half size, used (words 0..1 are never an entry) */
 static int       s_dlc_half = -1;
@@ -862,7 +868,7 @@ static void emit_fillrect(gdl_cur_t *out, uint32_t w0, uint32_t w1) {
     if (s_cc_emitted >> 32) { gdl_ccolor(out, 0, 0); s_cc_emitted = 0; }   /* constants off */
     emit_texenv_if_changed(out);
     emit_rendermode_if_changed(out);
-    gdl_texnorm(out, 0.0f);                                   /* texturing off */
+    gdl_texnorm_size(out, 0u);                                /* texturing off */
     s_texenv = te; s_rm_flags = rm;
     emit_rect_quad(out, xl, yl, xh, yh, 0, 0, 0, 0, r << 24 | g << 16 | b << 8 | 0xffu);
     emit_texnorm(out);
@@ -911,7 +917,7 @@ static void walk(const f3d_word_t *dl, gdl_cur_t *out, int depth) {
         case OP_SPNOOP:
             if (w1 == F3D_TAG_FULL_VIEWPORT) {
                 /* SM64's full-screen viewport: the title never sets one */
-                static const float vp_full[4] = { 160.0f, 120.0f, 127.75f, 0.0f };
+                static const int32_t vp_full[4] = { 160 << 16, 120 << 16, 511 << 14, 0 };
                 for (int k = 0; k < 4; k++) { s_vp_scale[k] = vp_full[k]; s_vp_trans[k] = vp_full[k]; }
                 s_vp_valid = 1;
                 emit_viewport(out, vp_full, vp_full);
@@ -961,8 +967,8 @@ static void walk(const f3d_word_t *dl, gdl_cur_t *out, int depth) {
         case OP_MOVEMEM:
             if ((w0 & 0xff) == MV_VIEWPORT) {
                 const int16_t *vp = (const int16_t *)w1;
-                float scale[4], trans[4];
-                for (int i = 0; i < 4; i++) { scale[i] = (float)vp[i] / 4.0f; trans[i] = (float)vp[4 + i] / 4.0f; }
+                int32_t scale[4], trans[4];             /* the Vp's 10.2 values / 4, in S15.16 */
+                for (int i = 0; i < 4; i++) { scale[i] = (int32_t)vp[i] * 16384; trans[i] = (int32_t)vp[4 + i] * 16384; }
                 emit_viewport(out, scale, trans);
                 for (int i = 0; i < 4; i++) { s_vp_scale[i] = scale[i]; s_vp_trans[i] = trans[i]; }
                 s_vp_valid = 1;
@@ -1041,8 +1047,8 @@ static void walk(const f3d_word_t *dl, gdl_cur_t *out, int depth) {
              * coin at half scale. Ignoring it tiled the coin 2x2. */
             if (s_tex_on) {
                 uint32_t ss = ((uint32_t)w1 >> 16) & 0xffff, ts = (uint32_t)w1 & 0xffff;
-                s_tex_sscale = ss >= 0xffffu ? 1.0f : (float)ss / 65536.0f;
-                s_tex_tscale = ts >= 0xffffu ? 1.0f : (float)ts / 65536.0f;
+                s_tex_sscale = ss >= 0xffffu ? 0x10000u : ss;
+                s_tex_tscale = ts >= 0xffffu ? 0x10000u : ts;
             }
             s_texbind_dirty = 1;
             emit_texnorm(out);

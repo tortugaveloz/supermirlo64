@@ -21,7 +21,11 @@ SM64_DIR_ABS := $(abspath $(SM64_DIR))
 FAKE_MIPS_BIN := $(abspath tools/fake-mips-toolchain)
 
 MIRLO_C          = $(MIRLO)/lang/c
-OUTPUT_DIRECTORY = build
+# PORT_BOOT=demo: boot straight into the attract demos (Cool, Cool Mountain
+# first, then the rest of the US demo table) -- sim/port_boot_demo.c, as the
+# host simulator's SIM_BOOT=demo. A benchmark: same scenes, same inputs.
+PORT_BOOT       ?= full
+OUTPUT_DIRECTORY = $(if $(filter demo,$(PORT_BOOT)),build_demo,build)
 
 # ---- MIRLO's toolchain (lang/mips: picolibc, compiler-rt, its runtime) -------
 include $(MIRLO)/lang/mips/mips.mk
@@ -71,6 +75,11 @@ SM64_DEFINES  := -DVERSION_US=1 -D_LANGUAGE_C -DNON_MATCHING=1 -DAVOID_UB=1 \
 GAME_INCLUDES := -I$(CURDIR)/include $(SM64_INCLUDES) -I$(CURDIR)/f3d -I$(CURDIR)/hal \
                  -I$(CURDIR)/audio -I$(MIRLO_C)/game -I$(MIRLO_C)/geom -I$(MIRLO_C)/audio
 GAME_DEFINES  := $(SM64_DEFINES) -DNO_SEGMENTED_MEMORY -DPORT_FULL_GAME
+# GEOM_F3D=1: the geom core translates the display lists (MIRLO's GDL_F3D;
+# its firmware built with F3D_EMIT=f3d/f3d_emit.c), not the game CPU
+ifeq ($(GEOM_F3D),1)
+GAME_DEFINES  += -DPORT_GEOM_F3D
+endif
 
 # The upstream Makefile's own C sources (src/, levels/, the libultra float
 # helpers lib/src/gu*.c) and data (actors, behaviours, the generated assets).
@@ -96,20 +105,21 @@ SM64_C_FILES := $(wildcard $(SM64_DIR_ABS)/src/game/*.c) \
 SM64_OBJECTS := $(patsubst $(SM64_DIR_ABS)/%.c,$(OUTPUT_DIRECTORY)/sm64/%.o,$(SM64_C_FILES))
 
 # ---- our code ------------------------------------------------------------------
-LOCAL_C := platform/game_main.c platform/port_boot.c platform/fps_overlay.c \
+LOCAL_C := platform/game_main.c $(if $(filter demo,$(PORT_BOOT)),sim/port_boot_demo.c,platform/port_boot.c) platform/fps_overlay.c \
            hal/os_hal.c hal/os_thread_hal.c hal/controller.c hal/sptask_dualcore.c \
            hal/exec_dl_wrap.c hal/rsp_stubs.c hal/fastmem.c hal/audio_hal.c hal/mirlo_game.c \
            f3d/f3d_emit.c \
            $(MIRLO_C)/game/frame.c $(MIRLO_C)/game/log.c $(MIRLO_C)/game/audio_load.c
 LOCAL_OBJECTS := $(addprefix $(OUTPUT_DIRECTORY)/local/,$(notdir $(LOCAL_C:.c=.o)))
-vpath %.c platform hal f3d $(MIRLO_C)/game
+vpath %.c platform hal f3d sim $(MIRLO_C)/game
 VPATH += $(LINKER_DIRECTORY)
 
 # Engine functions the port takes over with --wrap:
 #  - exec_display_list: runs the graphics task inline (hal/exec_dl_wrap.c);
 #  - end_master_display_list: the FPS overlay (platform/fps_overlay.c).
 comma := ,
-WRAP_FLAGS := $(addprefix -Wl$(comma)--wrap=,exec_display_list end_master_display_list)
+WRAP_FLAGS := $(addprefix -Wl$(comma)--wrap=,exec_display_list end_master_display_list \
+              $(if $(filter demo,$(PORT_BOOT)),lvl_init_or_update))
 
 # The sound data is not in the image: it is its own block of the game file
 # (SND0), loaded at boot; build/sound_le/sound_syms.ld pins its symbols.
