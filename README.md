@@ -126,6 +126,7 @@ More control options are included in the core settings (Pocket menu → Core Set
 * Start can be mapped to the combination Select+Start. That would free the Start button for something else.
 * R can be chosen to work as a modifier. In that mode, while R is pressed, X/B/Y/A become the four C buttons. In addition, the D-Pad works as a joystick press at 50%.
 * The stick and N64 D-pad sources can also be configured.
+* Analog sticks are supported. For it to work, you must connect the Dock and a controller via bluetooth (USB controller joysticks are not supported due to a limitation in the Dock's firmware). In game, enable the option "Stick" -> "L stick".
 
 ## Building on macOS
 
